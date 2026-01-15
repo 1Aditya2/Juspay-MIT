@@ -3485,52 +3485,38 @@ function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" 
 function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 class SpriteManager {
   constructor() {
-    this.sprites = new Map(); // spriteId -> sprite object
-    this.listeners = new Set(); // subscribers (React)
+    this.sprites = new Map();
+    this.listeners = new Set();
+    // this.collisionListeners = new Set();
   }
   register(sprite) {
-    this.sprites.set(sprite.id, _objectSpread(_objectSpread({}, sprite), {}, {
-      vx: 0,
-      vy: 0
-    }));
+    this.sprites.set(sprite.id, _objectSpread({}, sprite));
   }
-
-  // 🔄 Sync full sprite list (on app start / reset)
   syncSprites(spriteList) {
     this.sprites.clear();
     spriteList.forEach(sprite => {
       this.register(sprite);
     });
   }
-
-  // 📤 Subscribe to updates
   subscribe(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
-
-  // 📣 Notify React
   notify(sprite) {
     this.listeners.forEach(listener => listener(sprite));
   }
-
-  // 🔍 Read
   get(id) {
     return this.sprites.get(id);
   }
   getAll() {
     return Array.from(this.sprites.values());
   }
-
-  // ✏️ Mutate (ENGINE USES THIS)
   update(id, updates) {
     const sprite = this.sprites.get(id);
     if (!sprite) return;
     Object.assign(sprite, updates);
     this.notify(sprite);
   }
-
-  // ♻️ Reset (useful for replay)
   reset() {
     this.sprites.forEach(sprite => {
       sprite.x = 0;
@@ -3543,12 +3529,36 @@ class SpriteManager {
   }
 }
 const spriteManager = new SpriteManager();
+;// ./src/utils/helper.js
+const SCREEN_WIDTH = 465;
+const SPRITE_SIZE = 40;
+const STAGE_HEIGHT = 770;
+const getRandomX = () => {
+  const min = SPRITE_SIZE / 2;
+  const max = SCREEN_WIDTH - SPRITE_SIZE / 2;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+const getRandomY = () => {
+  const min = SPRITE_SIZE / 2;
+  const max = STAGE_HEIGHT - SPRITE_SIZE / 2;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const getLeftFromX = (x, stageWidth, spriteSize) => {
+  const raw = stageWidth / 2 + x - spriteSize / 2;
+  return clamp(raw, 0, stageWidth - spriteSize);
+};
+const getTopFromY = (y, stageHeight, spriteSize) => {
+  const raw = stageHeight / 2 + y - spriteSize / 2;
+  return clamp(raw, 0, stageHeight - spriteSize);
+};
 ;// ./src/state/SpriteContext.js
 function SpriteContext_ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function SpriteContext_objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? SpriteContext_ownKeys(Object(t), !0).forEach(function (r) { SpriteContext_defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : SpriteContext_ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function SpriteContext_defineProperty(e, r, t) { return (r = SpriteContext_toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
 function SpriteContext_toPropertyKey(t) { var i = SpriteContext_toPrimitive(t, "string"); return "symbol" == typeof i ? i : i + ""; }
 function SpriteContext_toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+
 
 
 
@@ -3568,11 +3578,13 @@ const SpriteProvider = _ref => {
     });
     return unsubscribe;
   }, []);
-  const addSprite = () => {
+  const addSprite = function () {
+    let type = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'cat';
     const newSprite = {
       id: esm_browser_v4(),
-      x: 0,
-      y: 0,
+      type: type,
+      x: getRandomX(),
+      y: getRandomY(),
       rotation: 0,
       sayText: null,
       thinkText: null
@@ -3602,68 +3614,113 @@ const useSprites = () => {
   }
   return context;
 };
+;// ./src/engine/sprites/workSpaceManager.js
+class WorkspaceManager {
+  constructor() {
+    this.workspaces = new Map();
+  }
+  register(spriteId, workspace) {
+    if (!spriteId || !workspace) return;
+    this.workspaces.set(spriteId, workspace);
+  }
+  get(spriteId) {
+    return this.workspaces.get(spriteId) || null;
+  }
+  has(spriteId) {
+    return this.workspaces.has(spriteId);
+  }
+  remove(spriteId) {
+    const ws = this.workspaces.get(spriteId);
+    if (ws) {
+      ws.dispose();
+      this.workspaces.delete(spriteId);
+    }
+  }
+  clear() {
+    this.workspaces.forEach(ws => ws.dispose());
+    this.workspaces.clear();
+  }
+}
+const workspaceManager = new WorkspaceManager();
 ;// ./src/state/WorkSpaceContext.js
+
 
 const WorkspaceContext = /*#__PURE__*/(0,react.createContext)(null);
 const WorkspaceProvider = _ref => {
   let {
     children
   } = _ref;
-  // spriteId -> Blockly.Workspace
-  const workspacesRef = (0,react.useRef)({});
   const [activeSpriteId, setActiveSpriteId] = (0,react.useState)(null);
-  const registerWorkspace = (spriteId, workspace) => {
-    workspacesRef.current[spriteId] = workspace;
-  };
-  const getWorkspace = spriteId => {
-    return workspacesRef.current[spriteId];
-  };
   return /*#__PURE__*/react.createElement(WorkspaceContext.Provider, {
     value: {
       activeSpriteId,
       setActiveSpriteId,
-      registerWorkspace,
-      getWorkspace,
-      workspacesRef
+      // Delegate to manager
+      registerWorkspace: (spriteId, workspace) => workspaceManager.register(spriteId, workspace),
+      getWorkspace: spriteId => workspaceManager.get(spriteId),
+      hasWorkspace: spriteId => workspaceManager.has(spriteId)
     }
   }, children);
 };
 const useWorkspace = () => (0,react.useContext)(WorkspaceContext);
-;// ./src/engine/runtime/heroSwap.js
-const handleHeroSwap = (timelines, collisions) => {
-  collisions.forEach(_ref => {
-    let [idA, idB] = _ref;
-    const timelineA = timelines.get(idA);
-    const timelineB = timelines.get(idB);
-    if (!timelineA || !timelineB) return;
-    const queueA = timelineA.getRemainingQueue();
-    const queueB = timelineB.getRemainingQueue();
-    timelineA.replaceQueue(queueB);
-    timelineB.replaceQueue(queueA);
-  });
-};
 ;// ./src/engine/sprites/Collision.js
 
-const checkCollision = function (a, b) {
-  let size = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 40;
-  return Math.abs(a.x - b.x) < size && Math.abs(a.y - b.y) < size;
-};
-const detectCollisions = () => {
+
+
+
+const detectXCollisions = function () {
+  let size = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 40;
   const sprites = spriteManager.getAll();
   const collisions = [];
   for (let i = 0; i < sprites.length; i++) {
     for (let j = i + 1; j < sprites.length; j++) {
-      if (checkCollision(sprites[i], sprites[j])) {
-        collisions.push([sprites[i].id, sprites[j].id]);
+      const a = sprites[i];
+      const b = sprites[j];
+      const half = size / 4;
+      const aLeft = a.x - half;
+      const aRight = a.x + half;
+      const bLeft = b.x - half;
+      const bRight = b.x + half;
+      if (aRight >= bLeft && bRight >= aLeft) {
+        collisions.push([a.id, b.id]);
       }
     }
   }
   return collisions;
 };
+const heroSwap = collisions => {
+  console.log({
+    collisions
+  });
+  collisions.forEach(_ref => {
+    let [aId, bId] = _ref;
+    const workspace1 = workspaceManager.get(aId);
+    const workspace2 = workspaceManager.get(bId);
+    if (!workspace1 || !workspace2) return;
+    console.log({
+      workspace1,
+      workspace2
+    });
+    const code1 = javascriptGenerator.workspaceToCode(workspace1);
+    const code2 = javascriptGenerator.workspaceToCode(workspace2);
+    const parsableCode1 = code1.replace(/,\s*$/, "");
+    const parsableCode2 = code2.replace(/,\s*$/, "");
+    // if (!parsableCode1.trim() || !parsableCode2.trim()) return;
+    console.log({
+      parsableCode1,
+      parsableCode2
+    });
+    const commands1 = JSON.parse("[".concat(parsableCode1, "]"));
+    const commands2 = JSON.parse("[".concat(parsableCode2, "]"));
+    AnimationEngine.run(aId, commands2);
+    AnimationEngine.run(bId, commands1);
+  });
+};
 ;// ./src/engine/runtime/Scheduler.js
 function Scheduler_defineProperty(e, r, t) { return (r = Scheduler_toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
 function Scheduler_toPropertyKey(t) { var i = Scheduler_toPrimitive(t, "string"); return "symbol" == typeof i ? i : i + ""; }
 function Scheduler_toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+
 
 class Scheduler {
   constructor() {
@@ -3675,19 +3732,13 @@ class Scheduler {
       const delta = (time - this.lastTime) / 1000;
       this.lastTime = time;
       this.tasks.forEach(task => task(delta));
-      const collisions = detectCollisions();
-      if (collisions.length) {
-        this.collisionHandlers.forEach(handler => handler(collisions));
-      }
+      const collisions = detectXCollisions(40);
+      heroSwap(collisions);
       requestAnimationFrame(this.loop);
     });
     this.tasks = new Set();
-    this.collisionHandlers = new Set();
     this.lastTime = null;
     this.running = false;
-  }
-  addCollisionHandler(handler) {
-    this.collisionHandlers.add(handler);
   }
   start() {
     if (this.running) return;
@@ -3730,7 +3781,7 @@ class Timeline {
   }
   next() {
     if (this.queue.length === 0) {
-      this.cleanup();
+      this.stop();
       return;
     }
     const command = this.queue.shift();
@@ -3830,12 +3881,6 @@ class Timeline {
       this.next();
     }, duration * 1000);
   }
-  getRemainingQueue() {
-    return [...this.queue];
-  }
-  replaceQueue(newQueue) {
-    this.queue = [...newQueue];
-  }
   runThink(_ref5) {
     let {
       text,
@@ -3860,105 +3905,29 @@ class Timeline {
       this.queue.unshift(...children.map(c => Timeline_objectSpread({}, c)));
     }
   }
-  cleanup() {
+  stop() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    this.queue = [];
+    this.currentTask = null;
   }
 }
 ;// ./src/engine/runtime/AnimationEngine.js
 
 
-
-
 const timelines = new Map();
-scheduler.addCollisionHandler(collisions => {
-  handleHeroSwap(timelines, collisions);
-});
 const AnimationEngine = {
   run(spriteId, commands) {
     const sprite = spriteManager.get(spriteId);
     if (!sprite || !Array.isArray(commands)) return;
-    const timeline = new Timeline(spriteId, commands);
-    timelines.set(sprite, timeline);
-    timeline.start();
-    this.executeCommands(spriteId, commands);
-  },
-  executeCommands(spriteId, commands) {
-    commands.forEach(command => {
-      this.executeCommand(spriteId, command);
-    });
-  },
-  executeCommand(spriteId, command) {
-    switch (command.type) {
-      case "MOVE":
-        {
-          const {
-            steps
-          } = command.payload;
-          const sprite = spriteManager.get(spriteId);
-          spriteManager.update(spriteId, {
-            x: sprite.x + steps
-          });
-          break;
-        }
-      case "TURN":
-        {
-          const {
-            degrees
-          } = command.payload;
-          const sprite = spriteManager.get(spriteId);
-          spriteManager.update(spriteId, {
-            rotation: sprite.rotation + degrees
-          });
-          break;
-        }
-      case "GOTO":
-        {
-          const {
-            x,
-            y
-          } = command.payload;
-          spriteManager.update(spriteId, {
-            x,
-            y
-          });
-          break;
-        }
-      case "SAY":
-        {
-          const {
-            text
-          } = command.payload;
-          spriteManager.update(spriteId, {
-            sayText: text
-          });
-          break;
-        }
-      case "THINK":
-        {
-          const {
-            text
-          } = command.payload;
-          spriteManager.update(spriteId, {
-            thinkText: text
-          });
-          break;
-        }
-      case "REPEAT":
-        {
-          const {
-            times
-          } = command.payload;
-          for (let i = 0; i < times; i++) {
-            this.executeCommands(spriteId, command.children || []);
-          }
-          break;
-        }
-      default:
-        console.warn("Unknown command:", command.type);
+    if (timelines.has(spriteId)) {
+      timelines.get(spriteId).stop();
     }
+    const timeline = new Timeline(spriteId, commands);
+    timelines.set(spriteId, timeline);
+    timeline.start();
   }
 };
 ;// ./src/components/PlayButton.js
@@ -3967,13 +3936,18 @@ const AnimationEngine = {
 
 
 
+
 const PlayButton = () => {
   const {
-    sprites
+    sprites,
+    collisionArray
   } = useSprites();
   const {
     getWorkspace
   } = useWorkspace();
+  console.log({
+    collisionArray
+  });
   const handlePlay = () => {
     sprites.forEach(sprite => {
       const workspace = getWorkspace(sprite.id);
@@ -3987,33 +3961,389 @@ const PlayButton = () => {
   };
   return /*#__PURE__*/react.createElement("button", {
     onClick: handlePlay,
-    className: "px-4 py-2 bg-green-500 text-white rounded absolute right-2/3 top-6"
+    style: {
+      right: '52%'
+    },
+    className: "px-4 py-2 bg-green-500 text-white rounded absolute top-6 mt-2 cursor-pointer"
   }, "\u25B6 Play");
 };
 /* harmony default export */ const components_PlayButton = (PlayButton);
+;// ./src/components/Sprites/CatSprite.js
+
+function CatSprite() {
+  return /*#__PURE__*/react.createElement("svg", {
+    xmlns: "http://www.w3.org/2000/svg",
+    className: "w-full h-full",
+    viewBox: "0.3210171699523926 0.3000000357627869 95.17898101806641 100.04156036376953",
+    version: "1.1",
+    xmlSpace: "preserve"
+  }, /*#__PURE__*/react.createElement("g", null, /*#__PURE__*/react.createElement("g", {
+    id: "Page-1",
+    stroke: "none",
+    fillRule: "evenodd"
+  }, /*#__PURE__*/react.createElement("g", {
+    id: "costume1"
+  }, /*#__PURE__*/react.createElement("g", {
+    id: "costume1.1"
+  }, /*#__PURE__*/react.createElement("g", {
+    id: "tail"
+  }, /*#__PURE__*/react.createElement("path", {
+    d: "M 21.9 73.8 C 19.5 73.3 16.6 72.5 14.2 70.3 C 8.7 65.4 7 57.3 3.2 59.4 C -0.7 61.5 -0.6 74.6 11.6 78.6 C 15.8 80 19.6 80 22.7 79.9 C 23.5 79.9 30.4 79.2 32.8 75.8 C 35.2 72.4 33.5 71.5 32.7 71.1 C 31.8 70.6 25.3 74.4 21.9 73.8 Z ",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 3.8 59.6 C 1.8 60.2 0.8 64.4 1.8 67.9 C 2.8 71.4 4.4 73.2 5.7 74.5 C 5.5 73.8 5.1 71.6 6.8 70.3 C 8.9 68.6 12.6 69.5 12.6 69.5 C 12.6 69.5 9.5 65.7 7.9 63 C 6.3 60.7 5.8 59.2 3.8 59.6 Z ",
+    id: "detail",
+    fill: "#FFFFFF",
+    strokeWidth: "1"
+  })), /*#__PURE__*/react.createElement("path", {
+    d: "M37.7,81.5 C35.9,82.7 29.7,87.1 21.8,89.6 L21.4,89.7 C21,89.8 20.8,90.3 21,90.7 C22.7,93.1 25.8,97.9 20.3,99.6 C15,101.3 5.1,87.2 9.3,83.5 C11.2,82.1 12.9,82.8 13.8,83.2 C14.3,83.4 14.8,83.4 15.3,83.3 C16.5,82.9 18.7,82.1 20.4,81.2 C24.7,79 25.7,78.1 27.7,76.6 C29.7,75.1 34.3,71.4 38,74.6 C41.2,77.3 39.4,80.3 37.7,81.5 Z",
+    id: "leg",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M53.6,60.7 C54.1,61.1 60.2,68.3 62.2,66.5 C64.6,64.4 67.9,60.3 71.5,63.6 C75.1,66.9 68.3,72.5 65.4,74 C58.5,77.1 52.9,71.2 51.7,69.6 C50.5,68 48.4,65.3 48.4,62.7 C48.5,59.9 51.9,59.2 53.6,60.7 Z",
+    id: "arm",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("g", {
+    id: "body-and-leg"
+  }, /*#__PURE__*/react.createElement("path", {
+    d: "M 46.2 76.7 C 47.4 75.8 48.6 74.3 50.2 72 C 51.5 70.1 52.9 66.4 52.9 66.4 C 53.8 63.9 54.4 59.1 51.1 59.2 C 48.9 59.3 46.9 59 43.5 58.5 C 37.5 57.3 36.4 56.5 33.9 60.6 C 31.2 65.4 24.3 68.9 32.8 77.2 C 32.8 77.2 37.7 81 43.6 86.8 C 47.6 90.7 53.9 96.3 56.1 98.2 C 56.6 98.6 57.2 98.8 57.8 98.9 C 67.5 99.8 74.7 98.8 74.7 94.5 C 74.7 87.3 60.4 89.8 60.4 89.8 C 60.4 89.8 55.8 85.9 53.7 84 L 46.2 76.7 Z ",
+    id: "body",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 50.6 70 C 50.6 70 52.5 67.5 48.2 64.8 C 43.7 61.9 42 65.1 40.2 67.5 C 38.2 70.6 40.2 72.1 42.2 73.9 C 43.8 75.4 45.3 76.6 45.3 76.6 C 45.3 76.6 48.4 74.5 50.6 70 Z ",
+    id: "tummy",
+    fill: "#FFFFFF",
+    strokeWidth: "1"
+  })), /*#__PURE__*/react.createElement("path", {
+    d: "M30.2,68.4 C32.4,71.2 35.8,74.7 31.5,77.6 C25.6,80.9 20.7,70.9 19.7,67.4 C18.8,64.3 21.4,62.3 23.6,60.6 C27.9,57.5 31.5,54.7 35.5,56.2 C40.5,58 36.9,62 34.4,63.8 C32.9,64.9 31.4,66.1 30.3,66.8 C30,67.3 29.9,67.9 30.2,68.4 Z",
+    id: "arm",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("g", {
+    id: "head"
+  }, /*#__PURE__*/react.createElement("path", {
+    d: "M 53.1 9 C 50.8 8.6 48.4 8.4 45.6 8.6 C 40.9 8.8 36.4 10.5 36.4 10.5 L 24.3 2.6 C 23.9 2.4 23.4 2.7 23.5 3.1 L 25.6 21 C 26.2 20.2 15 33.8 22.1 45.2 C 29.2 56.6 44.3 61.7 63.1 58 C 81.9 54.3 86.3 43.5 85.1 37.8 C 83.9 32.1 76.8 30 76.8 30 C 76.8 30 76.7 25.5 73.5 20 C 71.6 16.7 65.2 12 65.2 12 L 62.6 1.3 C 62.5 0.9 62 0.8 61.7 1 L 53.1 9 Z ",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFAB19"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 76.5 30.4 C 76.5 30.4 83.4 32.2 84.6 37.9 C 85.8 43.6 81 53.9 62.4 57.5 C 38.2 62.5 26.7 48.1 33.4 37.5 C 40.1 26.8 51.6 35.9 60 35.3 C 67.2 34.8 68 28.5 76.5 30.4 Z ",
+    id: "face",
+    fill: "#FFFFFF",
+    strokeWidth: "1"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 45 41.1 C 45 40.7 45.4 40.4 45.8 40.5 C 47.7 41.2 53.1 42.8 59.1 43.2 C 64.5 43.5 67.7 43.2 69.2 42.9 C 69.7 42.8 70.1 43.3 69.9 43.8 C 69 46.5 65.2 54 54.7 53.4 C 45.6 52.4 44.7 46 45 41.1 Z ",
+    id: "mouth",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFFFFF",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 83 35.4 C 83 35.4 90.2 35.3 94.9 31.5 ",
+    id: "whisker",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 83.4 41.3 C 83.4 41.3 87.3 43.2 93.6 42.7 ",
+    id: "whisker",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 59.6 32.7 C 61.7 32.7 63.9 32.9 64 33.6 C 64.1 35 62.6 37.8 61 37.9 C 59.2 38.1 55 35.6 55 34 C 54.9 32.8 57.6 32.7 59.6 32.7 Z ",
+    id: "nose",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#001026",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 14.6 31.2 C 14.6 31.2 23.2 34 26.7 37.1 ",
+    id: "whisker",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 15.3 41.2 C 15.3 41.2 22.7 42.3 27 40.6 ",
+    id: "whisker",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  }), /*#__PURE__*/react.createElement("g", {
+    id: "eye"
+  }, /*#__PURE__*/react.createElement("path", {
+    d: "M 71.4 21 C 74.3 25.5 74.4 30.6 71.6 32.4 C 68.8 34.2 64.2 32.1 61.2 27.6 C 58.3 23.1 58.2 18 61 16.2 C 63.8 14.3 68.5 16.5 71.4 21 Z ",
+    id: "pupil",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFFFFF",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 71 26.7 C 71 27.8 70.2 28.7 69.2 28.7 C 68.2 28.7 67.4 27.8 67.4 26.7 C 67.4 25.6 68.2 24.7 69.2 24.7 C 70.2 24.7 71 25.6 71 26.7 ",
+    id: "pupil",
+    fill: "#001026",
+    strokeWidth: "1"
+  })), /*#__PURE__*/react.createElement("g", {
+    id: "eye"
+  }, /*#__PURE__*/react.createElement("path", {
+    d: "M 46.6 23.8 C 49.6 28.2 49.4 33.6 46.7 35.5 C 43.4 37.4 39 36 36 31.6 C 32.9 27.2 32.7 21.5 35.8 19.3 C 38.9 17 43.6 19.4 46.6 23.8 Z ",
+    stroke: "#001026",
+    strokeWidth: "1.2",
+    fill: "#FFFFFF",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M 46 29.6 C 46 30.7 45.2 31.6 44.2 31.6 C 43.2 31.6 42.4 30.7 42.4 29.6 C 42.4 28.5 43.2 27.6 44.2 27.6 C 45.2 27.7 46 28.5 46 29.6 ",
+    id: "pupil",
+    fill: "#001026",
+    strokeWidth: "1"
+  }))))))));
+}
+;// ./src/components/Sprites/CircleSprite.js
+
+const CircleSprite = () => {
+  return /*#__PURE__*/react.createElement("svg", {
+    className: "w-full h-full",
+    viewBox: "0 0 64 64",
+    xmlns: "http://www.w3.org/2000/svg"
+  }, /*#__PURE__*/react.createElement("circle", {
+    cx: "32",
+    cy: "32",
+    r: "24",
+    fill: "#EF4444"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "24",
+    cy: "28",
+    r: "4",
+    fill: "#FFFFFF"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "40",
+    cy: "28",
+    r: "4",
+    fill: "#FFFFFF"
+  }), /*#__PURE__*/react.createElement("path", {
+    d: "M22 40 Q32 46 42 40",
+    stroke: "#FFFFFF",
+    "stroke-width": "4",
+    fill: "none"
+  }));
+};
+/* harmony default export */ const Sprites_CircleSprite = (CircleSprite);
+;// ./src/components/Sprites/SquareSprite.js
+
+const SquareSprite = () => {
+  return /*#__PURE__*/react.createElement("svg", {
+    className: "w-full h-full",
+    viewBox: "0 0 64 64",
+    xmlns: "http://www.w3.org/2000/svg"
+  }, /*#__PURE__*/react.createElement("rect", {
+    x: "8",
+    y: "8",
+    width: "48",
+    height: "48",
+    rx: "6",
+    fill: "#3B82F6"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "24",
+    cy: "28",
+    r: "4",
+    fill: "#FFFFFF"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "40",
+    cy: "28",
+    r: "4",
+    fill: "#FFFFFF"
+  }), /*#__PURE__*/react.createElement("rect", {
+    x: "22",
+    y: "40",
+    width: "20",
+    height: "4",
+    rx: "2",
+    fill: "#FFFFFF"
+  }));
+};
+/* harmony default export */ const Sprites_SquareSprite = (SquareSprite);
+;// ./src/components/Sprites/TriangleSprite.js
+
+const TriangleSprite = () => {
+  return /*#__PURE__*/react.createElement("svg", {
+    className: "w-full h-full",
+    viewBox: "0 0 64 64",
+    xmlns: "http://www.w3.org/2000/svg"
+  }, /*#__PURE__*/react.createElement("polygon", {
+    points: "32,8 56,52 8,52",
+    fill: "#22C55E"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "28",
+    cy: "34",
+    r: "3",
+    fill: "#FFFFFF"
+  }), /*#__PURE__*/react.createElement("circle", {
+    cx: "36",
+    cy: "34",
+    r: "3",
+    fill: "#FFFFFF"
+  }));
+};
+/* harmony default export */ const Sprites_TriangleSprite = (TriangleSprite);
+;// ./src/utils/constant.js
+
+
+
+
+
+const CATTYPE = 'cat';
+const SQUARETYPE = 'square';
+const CIRCLETYPE = 'circle';
+const TRIANGLETYPE = 'triangle';
+const allSprites = [{
+  type: CATTYPE,
+  element: /*#__PURE__*/react.createElement(CatSprite, null)
+}, {
+  type: SQUARETYPE,
+  element: /*#__PURE__*/react.createElement(Sprites_SquareSprite, null)
+}, {
+  type: CIRCLETYPE,
+  element: /*#__PURE__*/react.createElement(Sprites_CircleSprite, null)
+}, {
+  type: TRIANGLETYPE,
+  element: /*#__PURE__*/react.createElement(Sprites_TriangleSprite, null)
+}];
+;// ./src/components/DropDown.js
+
+const SimpleDropdown = _ref => {
+  var _selected$label;
+  let {
+    options = [],
+    value,
+    onChange
+  } = _ref;
+  const [open, setOpen] = (0,react.useState)(false);
+  const ref = (0,react.useRef)(null);
+  (0,react.useEffect)(() => {
+    const handleClickOutside = e => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  const selected = options.find(o => o.value === value);
+  return /*#__PURE__*/react.createElement("div", {
+    ref: ref,
+    className: "relative w-48"
+  }, /*#__PURE__*/react.createElement("button", {
+    onClick: () => setOpen(o => !o),
+    className: "w-full px-3 py-2 bg-white border rounded flex justify-between items-center hover:bg-gray-50"
+  }, /*#__PURE__*/react.createElement("span", null, (_selected$label = selected === null || selected === void 0 ? void 0 : selected.label) !== null && _selected$label !== void 0 ? _selected$label : "Select"), /*#__PURE__*/react.createElement("span", {
+    className: "text-gray-400"
+  }, "\u25BE")), open && /*#__PURE__*/react.createElement("div", {
+    className: "absolute z-10 w-full bg-white border rounded shadow"
+  }, options.map(opt => /*#__PURE__*/react.createElement("button", {
+    key: opt.value,
+    onClick: () => {
+      onChange(opt.value);
+      setOpen(false);
+    },
+    className: "w-full text-left px-3 py-2 hover:bg-gray-100"
+  }, opt.label))));
+};
+/* harmony default export */ const DropDown = (SimpleDropdown);
 ;// ./src/components/SpriteSelector.js
+
+
 
 
 
 const SpriteSelector = () => {
   const {
-    sprites,
+    sprites = [],
     addSprite
   } = useSprites();
+  const [selectSprite, setSelectSprite] = (0,react.useState)('');
   const {
-    activeSpriteId,
     setActiveSpriteId
   } = useWorkspace();
+  (0,react.useEffect)(() => {
+    if (sprites.length === 1) {
+      setSelectSprite(sprites[0].id);
+      setActiveSpriteId(sprites[0].id);
+    }
+  }, [sprites]);
+  const dropDownOptions = (0,react.useMemo)(() => {
+    return sprites.map((_ref, index) => {
+      let {
+        type,
+        id
+      } = _ref;
+      return {
+        label: /*#__PURE__*/react.createElement("div", {
+          className: "flex items-center gap-12"
+        }, /*#__PURE__*/react.createElement("p", null, "Sprite\xA0", index + 1), /*#__PURE__*/react.createElement("div", {
+          className: "w-8 h-8"
+        }, allSprites.find(_ref2 => {
+          let {
+            type: spriteType
+          } = _ref2;
+          return spriteType === type;
+        }).element)),
+        value: id
+      };
+    });
+  }, [sprites]);
   return /*#__PURE__*/react.createElement("div", {
-    className: "flex gap-2 p-2 absolute right-1/3 top-4"
-  }, sprites.map((sprite, index) => /*#__PURE__*/react.createElement("button", {
-    key: sprite.id,
-    onClick: () => setActiveSpriteId(sprite.id),
-    className: "px-2 py-1 rounded ".concat(activeSpriteId === sprite.id ? "bg-blue-500 text-white" : "bg-gray-200")
-  }, "Sprite", index + 1)), /*#__PURE__*/react.createElement("button", {
-    onClick: addSprite,
-    className: "px-2 py-1 bg-green-500 text-white rounded"
-  }, "+ Add Sprite"));
+    className: "flex gap-2 p-2 absolute right-1/3 top-6"
+  }, /*#__PURE__*/react.createElement(DropDown, {
+    options: dropDownOptions,
+    value: selectSprite,
+    onChange: v => {
+      setSelectSprite(v);
+      setActiveSpriteId(v);
+    }
+  }), /*#__PURE__*/react.createElement("div", {
+    className: "flex justify-between flex-col gap-4"
+  }, allSprites.map(_ref3 => {
+    let {
+      type,
+      element
+    } = _ref3;
+    return /*#__PURE__*/react.createElement("div", {
+      key: type,
+      className: "cursor-pointer w-14 h-14",
+      onClick: () => addSprite(type)
+    }, element);
+  })));
 };
 /* harmony default export */ const components_SpriteSelector = (SpriteSelector);
 // EXTERNAL MODULE: ./node_modules/blockly/index.js
@@ -4222,29 +4552,48 @@ const BlocklyWorkspace = _ref => {
     isActive
   } = _ref;
   const blocklyDivRef = (0,react.useRef)(null);
+  const [isEmpty, setIsEmpty] = (0,react.useState)(true);
   const {
     registerWorkspace,
-    getWorkspace
+    getWorkspace,
+    hasWorkspace
   } = useWorkspace();
   (0,react.useEffect)(() => {
-    if (getWorkspace(spriteId)) return;
+    if (!spriteId) return;
     const workspace = inject(blocklyDivRef.current, {
       toolbox: toolboxConfig
     });
     registerWorkspace(spriteId, workspace);
+    const onChange = () => {
+      const blocks = workspace.getAllBlocks(false);
+      setIsEmpty(blocks.length === 0);
+    };
+    workspace.addChangeListener(onChange);
+    onChange();
   }, [spriteId]);
   (0,react.useEffect)(() => {
     if (!isActive) return;
-    const workspace = getWorkspace(spriteId);
-    if (!workspace) return;
-    requestAnimationFrame(() => {
-      svgResize(workspace);
-    });
+    if (hasWorkspace(spriteId)) {
+      requestAnimationFrame(() => {
+        const workspace = getWorkspace(spriteId);
+        svgResize(workspace);
+      });
+    }
   }, [isActive]);
   return /*#__PURE__*/react.createElement("div", {
+    className: "w-full h-full"
+  }, /*#__PURE__*/react.createElement("div", {
     ref: blocklyDivRef,
     className: "w-full h-full"
-  });
+  }), isActive && isEmpty && /*#__PURE__*/react.createElement("div", {
+    className: "absolute right-1/2 top-1/2 flex flex-col items-center justify-center text-gray-500 pointer-events-none"
+  }, /*#__PURE__*/react.createElement("div", {
+    className: "text-3xl"
+  }, "\uD83D\uDC4B"), /*#__PURE__*/react.createElement("div", {
+    className: "mt-2 text-lg font-medium"
+  }, "Start building!"), /*#__PURE__*/react.createElement("div", {
+    className: "text-sm"
+  }, "Drag blocks from Motion / Looks")));
 };
 /* harmony default export */ const workspace_BlocklyWorkspace = (BlocklyWorkspace);
 ;// ./src/blockly/workspace/BlocklyWorkspaceContainer.js
@@ -4272,13 +4621,12 @@ const BlocklyWorkspaceContainer = () => {
 /* harmony default export */ const workspace_BlocklyWorkspaceContainer = (BlocklyWorkspaceContainer);
 ;// ./src/components/Sidebar.js
 
-// import BlocklyWorkspace from "../blockly/workspace/BlocklyWorkspace";
 
 
 
 function Sidebar() {
   return /*#__PURE__*/react.createElement("div", {
-    className: "w-full h-full border-r border-gray-200"
+    className: "w-full h-full"
   }, /*#__PURE__*/react.createElement(workspace_BlocklyWorkspaceContainer, null), /*#__PURE__*/react.createElement(components_PlayButton, null), /*#__PURE__*/react.createElement(components_SpriteSelector, null));
 }
 ;// ./src/blockly/blocks/motion.blocks.js
@@ -4436,196 +4784,45 @@ javascriptGenerator.forBlock["think_for_seconds"] = function (block) {
   }) + ",\n";
 };
 ;// ./src/blockly/index.js
+// blocks
 
 
 
+//generator
 
 
 
-;// ./src/components/CatSprite.js
-
-function CatSprite() {
-  return /*#__PURE__*/react.createElement("svg", {
-    xmlns: "http://www.w3.org/2000/svg",
-    width: "95.17898101806641",
-    height: "100.04156036376953",
-    viewBox: "0.3210171699523926 0.3000000357627869 95.17898101806641 100.04156036376953",
-    version: "1.1",
-    xmlSpace: "preserve"
-  }, /*#__PURE__*/react.createElement("g", null, /*#__PURE__*/react.createElement("g", {
-    id: "Page-1",
-    stroke: "none",
-    fillRule: "evenodd"
-  }, /*#__PURE__*/react.createElement("g", {
-    id: "costume1"
-  }, /*#__PURE__*/react.createElement("g", {
-    id: "costume1.1"
-  }, /*#__PURE__*/react.createElement("g", {
-    id: "tail"
-  }, /*#__PURE__*/react.createElement("path", {
-    d: "M 21.9 73.8 C 19.5 73.3 16.6 72.5 14.2 70.3 C 8.7 65.4 7 57.3 3.2 59.4 C -0.7 61.5 -0.6 74.6 11.6 78.6 C 15.8 80 19.6 80 22.7 79.9 C 23.5 79.9 30.4 79.2 32.8 75.8 C 35.2 72.4 33.5 71.5 32.7 71.1 C 31.8 70.6 25.3 74.4 21.9 73.8 Z ",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 3.8 59.6 C 1.8 60.2 0.8 64.4 1.8 67.9 C 2.8 71.4 4.4 73.2 5.7 74.5 C 5.5 73.8 5.1 71.6 6.8 70.3 C 8.9 68.6 12.6 69.5 12.6 69.5 C 12.6 69.5 9.5 65.7 7.9 63 C 6.3 60.7 5.8 59.2 3.8 59.6 Z ",
-    id: "detail",
-    fill: "#FFFFFF",
-    strokeWidth: "1"
-  })), /*#__PURE__*/react.createElement("path", {
-    d: "M37.7,81.5 C35.9,82.7 29.7,87.1 21.8,89.6 L21.4,89.7 C21,89.8 20.8,90.3 21,90.7 C22.7,93.1 25.8,97.9 20.3,99.6 C15,101.3 5.1,87.2 9.3,83.5 C11.2,82.1 12.9,82.8 13.8,83.2 C14.3,83.4 14.8,83.4 15.3,83.3 C16.5,82.9 18.7,82.1 20.4,81.2 C24.7,79 25.7,78.1 27.7,76.6 C29.7,75.1 34.3,71.4 38,74.6 C41.2,77.3 39.4,80.3 37.7,81.5 Z",
-    id: "leg",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M53.6,60.7 C54.1,61.1 60.2,68.3 62.2,66.5 C64.6,64.4 67.9,60.3 71.5,63.6 C75.1,66.9 68.3,72.5 65.4,74 C58.5,77.1 52.9,71.2 51.7,69.6 C50.5,68 48.4,65.3 48.4,62.7 C48.5,59.9 51.9,59.2 53.6,60.7 Z",
-    id: "arm",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("g", {
-    id: "body-and-leg"
-  }, /*#__PURE__*/react.createElement("path", {
-    d: "M 46.2 76.7 C 47.4 75.8 48.6 74.3 50.2 72 C 51.5 70.1 52.9 66.4 52.9 66.4 C 53.8 63.9 54.4 59.1 51.1 59.2 C 48.9 59.3 46.9 59 43.5 58.5 C 37.5 57.3 36.4 56.5 33.9 60.6 C 31.2 65.4 24.3 68.9 32.8 77.2 C 32.8 77.2 37.7 81 43.6 86.8 C 47.6 90.7 53.9 96.3 56.1 98.2 C 56.6 98.6 57.2 98.8 57.8 98.9 C 67.5 99.8 74.7 98.8 74.7 94.5 C 74.7 87.3 60.4 89.8 60.4 89.8 C 60.4 89.8 55.8 85.9 53.7 84 L 46.2 76.7 Z ",
-    id: "body",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 50.6 70 C 50.6 70 52.5 67.5 48.2 64.8 C 43.7 61.9 42 65.1 40.2 67.5 C 38.2 70.6 40.2 72.1 42.2 73.9 C 43.8 75.4 45.3 76.6 45.3 76.6 C 45.3 76.6 48.4 74.5 50.6 70 Z ",
-    id: "tummy",
-    fill: "#FFFFFF",
-    strokeWidth: "1"
-  })), /*#__PURE__*/react.createElement("path", {
-    d: "M30.2,68.4 C32.4,71.2 35.8,74.7 31.5,77.6 C25.6,80.9 20.7,70.9 19.7,67.4 C18.8,64.3 21.4,62.3 23.6,60.6 C27.9,57.5 31.5,54.7 35.5,56.2 C40.5,58 36.9,62 34.4,63.8 C32.9,64.9 31.4,66.1 30.3,66.8 C30,67.3 29.9,67.9 30.2,68.4 Z",
-    id: "arm",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("g", {
-    id: "head"
-  }, /*#__PURE__*/react.createElement("path", {
-    d: "M 53.1 9 C 50.8 8.6 48.4 8.4 45.6 8.6 C 40.9 8.8 36.4 10.5 36.4 10.5 L 24.3 2.6 C 23.9 2.4 23.4 2.7 23.5 3.1 L 25.6 21 C 26.2 20.2 15 33.8 22.1 45.2 C 29.2 56.6 44.3 61.7 63.1 58 C 81.9 54.3 86.3 43.5 85.1 37.8 C 83.9 32.1 76.8 30 76.8 30 C 76.8 30 76.7 25.5 73.5 20 C 71.6 16.7 65.2 12 65.2 12 L 62.6 1.3 C 62.5 0.9 62 0.8 61.7 1 L 53.1 9 Z ",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFAB19"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 76.5 30.4 C 76.5 30.4 83.4 32.2 84.6 37.9 C 85.8 43.6 81 53.9 62.4 57.5 C 38.2 62.5 26.7 48.1 33.4 37.5 C 40.1 26.8 51.6 35.9 60 35.3 C 67.2 34.8 68 28.5 76.5 30.4 Z ",
-    id: "face",
-    fill: "#FFFFFF",
-    strokeWidth: "1"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 45 41.1 C 45 40.7 45.4 40.4 45.8 40.5 C 47.7 41.2 53.1 42.8 59.1 43.2 C 64.5 43.5 67.7 43.2 69.2 42.9 C 69.7 42.8 70.1 43.3 69.9 43.8 C 69 46.5 65.2 54 54.7 53.4 C 45.6 52.4 44.7 46 45 41.1 Z ",
-    id: "mouth",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFFFFF",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 83 35.4 C 83 35.4 90.2 35.3 94.9 31.5 ",
-    id: "whisker",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    fill: "none"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 83.4 41.3 C 83.4 41.3 87.3 43.2 93.6 42.7 ",
-    id: "whisker",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    fill: "none"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 59.6 32.7 C 61.7 32.7 63.9 32.9 64 33.6 C 64.1 35 62.6 37.8 61 37.9 C 59.2 38.1 55 35.6 55 34 C 54.9 32.8 57.6 32.7 59.6 32.7 Z ",
-    id: "nose",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#001026",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 14.6 31.2 C 14.6 31.2 23.2 34 26.7 37.1 ",
-    id: "whisker",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    fill: "none"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 15.3 41.2 C 15.3 41.2 22.7 42.3 27 40.6 ",
-    id: "whisker",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    fill: "none"
-  }), /*#__PURE__*/react.createElement("g", {
-    id: "eye"
-  }, /*#__PURE__*/react.createElement("path", {
-    d: "M 71.4 21 C 74.3 25.5 74.4 30.6 71.6 32.4 C 68.8 34.2 64.2 32.1 61.2 27.6 C 58.3 23.1 58.2 18 61 16.2 C 63.8 14.3 68.5 16.5 71.4 21 Z ",
-    id: "pupil",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFFFFF",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 71 26.7 C 71 27.8 70.2 28.7 69.2 28.7 C 68.2 28.7 67.4 27.8 67.4 26.7 C 67.4 25.6 68.2 24.7 69.2 24.7 C 70.2 24.7 71 25.6 71 26.7 ",
-    id: "pupil",
-    fill: "#001026",
-    strokeWidth: "1"
-  })), /*#__PURE__*/react.createElement("g", {
-    id: "eye"
-  }, /*#__PURE__*/react.createElement("path", {
-    d: "M 46.6 23.8 C 49.6 28.2 49.4 33.6 46.7 35.5 C 43.4 37.4 39 36 36 31.6 C 32.9 27.2 32.7 21.5 35.8 19.3 C 38.9 17 43.6 19.4 46.6 23.8 Z ",
-    stroke: "#001026",
-    strokeWidth: "1.2",
-    fill: "#FFFFFF",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }), /*#__PURE__*/react.createElement("path", {
-    d: "M 46 29.6 C 46 30.7 45.2 31.6 44.2 31.6 C 43.2 31.6 42.4 30.7 42.4 29.6 C 42.4 28.5 43.2 27.6 44.2 27.6 C 45.2 27.7 46 28.5 46 29.6 ",
-    id: "pupil",
-    fill: "#001026",
-    strokeWidth: "1"
-  }))))))));
-}
 ;// ./src/canvas/SpriteView.js
 
 
-const SPRITE_SIZE = 80;
+
+const SpriteView_SPRITE_SIZE = 40;
 const SpriteView = _ref => {
   let {
     sprite,
     stageWidth,
     stageHeight
   } = _ref;
-  const left = stageWidth / 2 + sprite.x - SPRITE_SIZE / 2;
-  const top = stageHeight / 2 - sprite.y - SPRITE_SIZE / 2;
+  const left = getLeftFromX(sprite.x, stageWidth, SpriteView_SPRITE_SIZE);
+  const top = getTopFromY(sprite.y, stageHeight, SpriteView_SPRITE_SIZE);
+  const {
+    type = CATTYPE
+  } = sprite || {};
   return /*#__PURE__*/react.createElement("div", {
     className: "absolute flex items-center justify-center text-white rounded",
     style: {
-      width: SPRITE_SIZE,
-      height: SPRITE_SIZE,
+      width: SpriteView_SPRITE_SIZE,
+      height: SpriteView_SPRITE_SIZE,
       transform: "rotate(".concat(sprite.rotation, "deg)"),
       left,
       top
     }
-  }, /*#__PURE__*/react.createElement(CatSprite, null), sprite.sayText && /*#__PURE__*/react.createElement("div", {
+  }, allSprites.find(_ref2 => {
+    let {
+      type: spriteType
+    } = _ref2;
+    return spriteType === type;
+  }).element, sprite.sayText && /*#__PURE__*/react.createElement("div", {
     className: "absolute -top-8 bg-white text-black text-xs px-2 py-1 rounded shadow"
   }, sprite.sayText), sprite.thinkText && /*#__PURE__*/react.createElement("div", {
     className: "absolute -top-8 bg-white text-black text-xs px-2 py-1 rounded shadow"
@@ -4636,8 +4833,8 @@ const SpriteView = _ref => {
 
 
 
-const STAGE_WIDTH = 600;
-const STAGE_HEIGHT = 400;
+const STAGE_WIDTH = 465;
+const Stage_STAGE_HEIGHT = 770;
 const Stage = () => {
   const {
     sprites
@@ -4648,13 +4845,13 @@ const Stage = () => {
     className: "relative bg-white rounded",
     style: {
       width: STAGE_WIDTH,
-      height: STAGE_HEIGHT
+      height: Stage_STAGE_HEIGHT
     }
   }, sprites.map(sprite => /*#__PURE__*/react.createElement(canvas_SpriteView, {
     key: sprite.id,
     sprite: sprite,
     stageWidth: STAGE_WIDTH,
-    stageHeight: STAGE_HEIGHT
+    stageHeight: Stage_STAGE_HEIGHT
   }))));
 };
 /* harmony default export */ const canvas_Stage = (Stage);
@@ -4672,13 +4869,20 @@ function PreviewArea() {
 
 
 
+
 function App() {
+  const {
+    addSprite
+  } = useSprites();
+  (0,react.useEffect)(() => {
+    addSprite();
+  }, []);
   return /*#__PURE__*/react.createElement("div", {
     className: "bg-blue-100 pt-6 font-sans"
   }, /*#__PURE__*/react.createElement("div", {
-    className: "h-screen overflow-hidden flex flex-row  "
+    className: "h-screen overflow-hidden flex flex-row"
   }, /*#__PURE__*/react.createElement("div", {
-    className: "flex-1 flex flex-row bg-white border-t border-r border-gray-200 rounded-tr-xl mr-2"
+    className: "flex-1 flex flex-row bg-white border-t border-r border-gray-200 rounded-tr-xl"
   }, /*#__PURE__*/react.createElement(Sidebar, null)), /*#__PURE__*/react.createElement("div", {
     className: "w-1/3 h-screen overflow-hidden flex flex-row bg-white border-t border-l border-gray-200 rounded-tl-xl ml-2"
   }, /*#__PURE__*/react.createElement(PreviewArea, null))));
