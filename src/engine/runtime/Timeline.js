@@ -1,6 +1,5 @@
 import { scheduler } from "./Scheduler";
 import { spriteManager } from "../sprites/SpriteManager";
-
 export class Timeline {
   constructor(spriteId, commands) {
     this.spriteId = spriteId;
@@ -15,7 +14,7 @@ export class Timeline {
 
   next() {
     if (this.queue.length === 0) {
-      this.cleanup();
+      this.stop();
       return;
     }
 
@@ -111,14 +110,6 @@ export class Timeline {
       this.next();
     }, duration * 1000);
   }
-  getRemainingQueue() {
-    return [...this.queue];
-  }
-  
-  replaceQueue(newQueue) {
-    this.queue = [...newQueue];
-  }
-
   runThink({ text, duration = 2 }) {
     spriteManager.update(this.spriteId, { thinkText: text });
 
@@ -136,11 +127,12 @@ export class Timeline {
       this.queue.unshift(...children.map(c => ({ ...c })));
     }
   }
-
-  cleanup() {
+  stop() {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    this.queue = [];
+    this.currentTask = null;
   }
 }

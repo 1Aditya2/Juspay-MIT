@@ -1,10 +1,8 @@
 import React from "react";
 import { useSprites } from "../state/SpriteContext";
 import SpriteView from "./SpriteView";
-
-const STAGE_WIDTH = 600;
-const STAGE_HEIGHT = 400;
-
+const STAGE_WIDTH = 465;
+const STAGE_HEIGHT = 770;
 const Stage = () => {
   const { sprites } = useSprites();
 

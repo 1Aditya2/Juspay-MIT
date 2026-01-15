@@ -1,25 +1,24 @@
-import { detectCollisions } from "../sprites/Collision";
+import { detectXCollisions, heroSwap } from "../sprites/Collision";
+import { spriteManager } from "../sprites/SpriteManager";
 
 class Scheduler {
     constructor() {
       this.tasks = new Set();
-      this.collisionHandlers = new Set();
       this.lastTime = null;
       this.running = false;
     }
-    addCollisionHandler(handler) {
-      this.collisionHandlers.add(handler);
-    }
+
     start() {
       if (this.running) return;
       this.running = true;
       requestAnimationFrame(this.loop);
     }
+
     stop() {
       this.running = false;
       this.lastTime = null;
     }
-  
+
     loop = (time) => {
       if (!this.running) return;
   
@@ -29,16 +28,11 @@ class Scheduler {
   
       const delta = (time - this.lastTime) / 1000;
       this.lastTime = time;
-  
-      this.tasks.forEach((task) => task(delta));
 
-      const collisions = detectCollisions();
-      if (collisions.length) {
-        this.collisionHandlers.forEach((handler) =>
-          handler(collisions)
-        );
-      }
-  
+      this.tasks.forEach((task) => task(delta));
+      const collisions = detectXCollisions(40);
+      heroSwap(collisions);
+
       requestAnimationFrame(this.loop);
     };
   

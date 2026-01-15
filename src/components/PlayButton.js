@@ -2,10 +2,12 @@ import { javascriptGenerator } from "blockly/javascript";
 import { useSprites } from "../state/SpriteContext";
 import { useWorkspace } from "../state/WorkSpaceContext";
 import { AnimationEngine } from "../engine/runtime/AnimationEngine";
-import React from "react";
+import { spriteManager } from "../engine/sprites/SpriteManager";
+import React, { useEffect } from "react";
 const PlayButton = () => {
-  const { sprites } = useSprites();
+  const { sprites, collisionArray } = useSprites();
   const { getWorkspace } = useWorkspace();
+  console.log({ collisionArray })
 
   const handlePlay = () => {
     sprites.forEach((sprite) => {
@@ -22,7 +24,8 @@ const PlayButton = () => {
   return (
     <button
       onClick={handlePlay}
-      className="px-4 py-2 bg-green-500 text-white rounded absolute right-2/3 top-6"
+      style={{ right: '52%' }}
+      className="px-4 py-2 bg-green-500 text-white rounded absolute top-6 mt-2 cursor-pointer"
     >
       ▶ Play
     </button>

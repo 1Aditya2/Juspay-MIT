@@ -1,11 +1,11 @@
 import React from "react";
-import CatSprite from "../components/CatSprite";
-
-const SPRITE_SIZE = 80;
-
+import { allSprites, CATTYPE } from "../utils/constant";
+import { getLeftFromX, getTopFromY } from "../utils/helper";
+const SPRITE_SIZE = 40;
 const SpriteView = ({ sprite, stageWidth, stageHeight }) => {
-  const left = stageWidth / 2 + sprite.x - SPRITE_SIZE / 2;
-  const top = stageHeight / 2 - sprite.y - SPRITE_SIZE / 2;
+  const left = getLeftFromX(sprite.x, stageWidth, SPRITE_SIZE);
+  const top = getTopFromY(sprite.y, stageHeight, SPRITE_SIZE)
+  const { type = CATTYPE } = sprite || {};
 
   return (
     <div
@@ -15,10 +15,10 @@ const SpriteView = ({ sprite, stageWidth, stageHeight }) => {
         height: SPRITE_SIZE,
         transform: `rotate(${sprite.rotation}deg)`,
         left,
-        top,
+        top
       }}
     >
-      <CatSprite/>
+      {allSprites.find(({ type:spriteType }) => spriteType === type).element}
       {sprite.sayText && (
         <div className="absolute -top-8 bg-white text-black text-xs px-2 py-1 rounded shadow">
           {sprite.sayText}

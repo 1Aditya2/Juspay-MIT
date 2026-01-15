@@ -1,45 +1,33 @@
 class SpriteManager {
     constructor() {
-      this.sprites = new Map(); // spriteId -> sprite object
-      this.listeners = new Set(); // subscribers (React)
+      this.sprites = new Map();
+      this.listeners = new Set();
+      // this.collisionListeners = new Set();
     }
     register(sprite) {
       this.sprites.set(sprite.id, {
-        ...sprite,
-        vx: 0,
-        vy: 0,
+        ...sprite
       });
     }
-  
-    // 🔄 Sync full sprite list (on app start / reset)
     syncSprites(spriteList) {
       this.sprites.clear();
       spriteList.forEach((sprite) => {
         this.register(sprite);
       });
     }
-  
-    // 📤 Subscribe to updates
     subscribe(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
     }
-  
-    // 📣 Notify React
     notify(sprite) {
       this.listeners.forEach((listener) => listener(sprite));
     }
-  
-    // 🔍 Read
     get(id) {
       return this.sprites.get(id);
     }
-  
     getAll() {
       return Array.from(this.sprites.values());
     }
-  
-    // ✏️ Mutate (ENGINE USES THIS)
     update(id, updates) {
       const sprite = this.sprites.get(id);
       if (!sprite) return;
@@ -47,8 +35,6 @@ class SpriteManager {
       Object.assign(sprite, updates);
       this.notify(sprite);
     }
-  
-    // ♻️ Reset (useful for replay)
     reset() {
       this.sprites.forEach((sprite) => {
         sprite.x = 0;

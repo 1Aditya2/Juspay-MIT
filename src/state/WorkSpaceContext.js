@@ -1,28 +1,26 @@
-import React, { createContext, useContext, useRef, useState } from "react";
+import React, { createContext, useContext, useState } from "react";
+import { workspaceManager } from "../engine/sprites/workSpaceManager";
 
 const WorkspaceContext = createContext(null);
 
 export const WorkspaceProvider = ({ children }) => {
-  // spriteId -> Blockly.Workspace
-  const workspacesRef = useRef({});
   const [activeSpriteId, setActiveSpriteId] = useState(null);
-
-  const registerWorkspace = (spriteId, workspace) => {
-    workspacesRef.current[spriteId] = workspace;
-  };
-
-  const getWorkspace = (spriteId) => {
-    return workspacesRef.current[spriteId];
-  };
 
   return (
     <WorkspaceContext.Provider
       value={{
         activeSpriteId,
         setActiveSpriteId,
-        registerWorkspace,
-        getWorkspace,
-        workspacesRef,
+
+        // Delegate to manager
+        registerWorkspace: (spriteId, workspace) =>
+          workspaceManager.register(spriteId, workspace),
+
+        getWorkspace: (spriteId) =>
+          workspaceManager.get(spriteId),
+
+        hasWorkspace: (spriteId) =>
+          workspaceManager.has(spriteId),
       }}
     >
       {children}

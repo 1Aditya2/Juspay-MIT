@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { v4 as uuid } from "uuid";
 import { spriteManager } from "../engine/sprites/SpriteManager";
+import { getRandomX, getRandomY } from "../utils/helper";
 
 const SpriteContext = createContext(null);
 
@@ -19,11 +20,12 @@ export const SpriteProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  const addSprite = () => {
+  const addSprite = (type = 'cat') => {
     const newSprite = {
       id: uuid(),
-      x: 0,
-      y: 0,
+      type: type,
+      x: getRandomX(),
+      y: getRandomY(),
       rotation: 0,
       sayText: null,
       thinkText: null,
@@ -53,7 +55,7 @@ export const SpriteProvider = ({ children }) => {
         activeSpriteId,
         setActiveSpriteId,
         addSprite,
-        updateSprite,
+        updateSprite
       }}
     >
       {children}
