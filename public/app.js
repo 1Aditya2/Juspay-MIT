@@ -3544,6 +3544,12 @@ const getRandomY = () => {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const xFromLeft = (left, stageWidth, spriteSize) => {
+  return left + spriteSize / 2 - stageWidth / 2;
+};
+const yFromTop = (top, stageHeight, spriteSize) => {
+  return stageHeight / 2 - (top + spriteSize / 2);
+};
 const getLeftFromX = (x, stageWidth, spriteSize) => {
   const raw = stageWidth / 2 + x - spriteSize / 2;
   return clamp(raw, 0, stageWidth - spriteSize);
@@ -4796,6 +4802,7 @@ javascriptGenerator.forBlock["think_for_seconds"] = function (block) {
 
 
 
+
 const SpriteView_SPRITE_SIZE = 40;
 const SpriteView = _ref => {
   let {
@@ -4803,13 +4810,47 @@ const SpriteView = _ref => {
     stageWidth,
     stageHeight
   } = _ref;
+  const dragOffset = (0,react.useRef)({
+    x: 0,
+    y: 0
+  });
   const left = getLeftFromX(sprite.x, stageWidth, SpriteView_SPRITE_SIZE);
   const top = getTopFromY(sprite.y, stageHeight, SpriteView_SPRITE_SIZE);
   const {
     type = CATTYPE
   } = sprite || {};
+  const onMouseDown = e => {
+    e.stopPropagation();
+    dragOffset.current = {
+      x: e.clientX - left,
+      y: e.clientY - top
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+  const onMouseMove = e => {
+    const rawLeft = e.clientX - dragOffset.current.x;
+    const rawTop = e.clientY - dragOffset.current.y;
+    const boundedLeft = clamp(rawLeft, 0, stageWidth - SpriteView_SPRITE_SIZE);
+    const boundedTop = clamp(rawTop, 0, stageHeight - SpriteView_SPRITE_SIZE);
+    const newX = xFromLeft(boundedLeft, stageWidth, SpriteView_SPRITE_SIZE);
+    const newY = yFromTop(boundedTop, stageHeight, SpriteView_SPRITE_SIZE);
+    console.log({
+      newX,
+      newY
+    });
+    spriteManager.update(sprite.id, {
+      x: newX,
+      y: -newY
+    });
+  };
+  const onMouseUp = () => {
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
   return /*#__PURE__*/react.createElement("div", {
-    className: "absolute flex items-center justify-center text-white rounded",
+    onMouseDown: onMouseDown,
+    className: "absolute flex items-center justify-center text-white rounded cursor-move",
     style: {
       width: SpriteView_SPRITE_SIZE,
       height: SpriteView_SPRITE_SIZE,
@@ -4880,7 +4921,7 @@ function App() {
   return /*#__PURE__*/react.createElement("div", {
     className: "bg-blue-100 pt-6 font-sans"
   }, /*#__PURE__*/react.createElement("div", {
-    className: "h-screen overflow-hidden flex flex-row"
+    className: "h-screen flex overflow-hidden flex-row"
   }, /*#__PURE__*/react.createElement("div", {
     className: "flex-1 flex flex-row bg-white border-t border-r border-gray-200 rounded-tr-xl"
   }, /*#__PURE__*/react.createElement(Sidebar, null)), /*#__PURE__*/react.createElement("div", {

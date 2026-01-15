@@ -13,9 +13,15 @@ export const getRandomY = () => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 };
 
-const clamp = (value, min, max) =>
+export const clamp = (value, min, max) =>
     Math.min(Math.max(value, min), max);
-
+export const xFromLeft = (left, stageWidth, spriteSize) => {
+    return left + spriteSize / 2 - stageWidth / 2;
+  };
+  
+  export const yFromTop = (top, stageHeight, spriteSize) => {
+    return stageHeight / 2 - (top + spriteSize / 2);
+  };
 export const getLeftFromX = (x, stageWidth, spriteSize) => {
     const raw = stageWidth / 2 + x - spriteSize / 2;
     return clamp(raw, 0, stageWidth - spriteSize);
